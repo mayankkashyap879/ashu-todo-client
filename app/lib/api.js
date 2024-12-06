@@ -1,37 +1,57 @@
 // app/lib/api.js
-const API_BASE_URL = 'http://localhost:4001/todos';
+const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_BASE_URL}/todos`;
+const API_TIMEOUT = process.env.NEXT_PUBLIC_API_TIMEOUT || 5000;
+
+// Utility function for handling API responses
+async function handleResponse(response) {
+  if (!response.ok) {
+    if (response.status === 404) {
+      return [];
+    }
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `API Error: ${response.status}`);
+  }
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
+}
+
+// Utility function for API requests with timeout
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export async function getAllTodos(filters = {}) {
-  console.log("getAllTodos");
   try {
-    // Build query string from filters
     const queryParams = new URLSearchParams();
-    if (filters.status) queryParams.append('status', filters.status);
-    if (filters.priority) queryParams.append('priority', filters.priority);
-    if (filters.search) queryParams.append('search', filters.search);
-    if (filters.sortBy) queryParams.append('sortBy', filters.sortBy);
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) queryParams.append(key, value);
+    });
 
     const url = `${API_BASE_URL}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        return [];
-      }
-      throw new Error('Failed to fetch todos');
-    }
-    
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
+    const response = await fetchWithTimeout(url);
+    return await handleResponse(response);
   } catch (error) {
-    console.error('Error fetching todos:', error);
+    if (process.env.NEXT_PUBLIC_ENABLE_ERROR_LOGGING === 'true') {
+      console.error('Error fetching todos:', error);
+    }
     return [];
   }
 }
 
 export async function addTodo(todo) {
   try {
-    const response = await fetch(API_BASE_URL, {
+    const response = await fetchWithTimeout(API_BASE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -45,21 +65,18 @@ export async function addTodo(todo) {
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to add todo');
-    }
-
-    return await response.json();
+    return await handleResponse(response);
   } catch (error) {
-    console.error('Error adding todo:', error);
+    if (process.env.NEXT_PUBLIC_ENABLE_ERROR_LOGGING === 'true') {
+      console.error('Error adding todo:', error);
+    }
     throw error;
   }
 }
 
 export async function updateTodo(id, updates) {
   try {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -67,54 +84,41 @@ export async function updateTodo(id, updates) {
       body: JSON.stringify(updates)
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to update todo');
-    }
-
-    return await response.json();
+    return await handleResponse(response);
   } catch (error) {
-    console.error('Error updating todo:', error);
+    if (process.env.NEXT_PUBLIC_ENABLE_ERROR_LOGGING === 'true') {
+      console.error('Error updating todo:', error);
+    }
     throw error;
   }
 }
 
 export async function getUpcomingTodos() {
   try {
-    const response = await fetch(`${API_BASE_URL}/upcoming`);
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        return [];
-      }
-      throw new Error('Failed to fetch upcoming todos');
-    }
-    
-    const data = await response.json();
-    return Array.isArray(data) ? data : [];
+    const response = await fetchWithTimeout(`${API_BASE_URL}/upcoming`);
+    return await handleResponse(response);
   } catch (error) {
-    console.error('Error fetching upcoming todos:', error);
+    if (process.env.NEXT_PUBLIC_ENABLE_ERROR_LOGGING === 'true') {
+      console.error('Error fetching upcoming todos:', error);
+    }
     return [];
   }
 }
 
 export async function deleteTodo(id) {
   try {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/${id}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
       }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to delete todo');
-    }
-
-    return await response.json();
+    return await handleResponse(response);
   } catch (error) {
-    console.error('Error deleting todo:', error);
+    if (process.env.NEXT_PUBLIC_ENABLE_ERROR_LOGGING === 'true') {
+      console.error('Error deleting todo:', error);
+    }
     throw error;
   }
 }
